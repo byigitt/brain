@@ -5,7 +5,8 @@
       "Bash(pnpm install:*)",
       "Bash(pnpm add:*)",
       "Bash(rm:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }
