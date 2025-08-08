@@ -1,6 +1,7 @@
 <div align="center">
   <br />
-  <img src="https://raw.githubusercontent.com/byigitt/brain/main/src-tauri/icons/icon.svg" alt="brain logo" width="200" height="200" />
+  <img src="https://raw.githubusercontent.com/byigitt/brain/9bf7b5f765967db914cfa16b78c9031f98fe4dc4/src-tauri/icons/Square310x310Logo.png?token=GHSAT0AAAAAADFIJYOIBURSGKZ5J23RWFM22EV7YUA" alt="brain logo" width="200" height="200" />
+  <br />
   <br />
   <h1>brain</h1>
   <p><strong>minimal note-taking with obsidian-like ux and notion-style editing</strong></p>
