@@ -17,9 +17,11 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
   const [showSaved, setShowSaved] = useState(false);
   const [wordCount, setWordCount] = useState(0);
   const [focusMode, setFocusMode] = useState(false);
+  const [fontSize, setFontSize] = useState(14); // Default font size in px
   const { theme } = useTheme();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isDeleting = useRef(false);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   
   const editor = useCreateBlockNote({
     initialContent: note?.content ? 
@@ -117,6 +119,24 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
   useEffect(() => {
     isDeleting.current = false;
   }, [note?.id]);
+
+  // Handle Ctrl+Scroll for font size
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey && editorContainerRef.current?.contains(e.target as Node)) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -1 : 1;
+        setFontSize(prev => {
+          const newSize = prev + delta;
+          // Clamp between 10px and 30px
+          return Math.min(Math.max(newSize, 10), 30);
+        });
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleWheel);
+  }, []);
 
   // Expose save and focus methods to parent via ref
   React.useImperativeHandle(ref, () => ({
@@ -292,12 +312,16 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
       </div>
       
       {/* Editor */}
-      <div style={{ 
-        flex: 1,
-        overflowY: 'auto',
-        padding: focusMode ? '3rem 2rem' : '2rem 1.5rem',
-        transition: 'padding 200ms'
-      }}>
+      <div 
+        ref={editorContainerRef}
+        style={{ 
+          flex: 1,
+          overflowY: 'auto',
+          padding: focusMode ? '3rem 2rem' : '2rem 1.5rem',
+          transition: 'padding 200ms',
+          fontSize: `${fontSize}px`
+        }}
+      >
         <div style={{ 
           maxWidth: focusMode ? '700px' : '900px',
           margin: '0 auto',
@@ -310,6 +334,26 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
           />
         </div>
       </div>
+
+      {/* Font size indicator */}
+      {fontSize !== 14 && (
+        <div style={{
+          position: 'fixed',
+          bottom: '3.5rem',
+          right: '1.5rem',
+          padding: '0.25rem 0.5rem',
+          backgroundColor: 'var(--surface)',
+          borderRadius: '0.25rem',
+          fontSize: '0.6875rem',
+          fontFamily: 'JetBrains Mono, monospace',
+          color: 'var(--muted)',
+          border: '1px solid var(--border)',
+          opacity: 0.7,
+          pointerEvents: 'none'
+        }}>
+          {fontSize}px
+        </div>
+      )}
 
       {/* Save indicator - minimal */}
       <div style={{
