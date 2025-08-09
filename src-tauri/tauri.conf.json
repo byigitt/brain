@@ -17,6 +17,21 @@
         "all": false,
         "open": true
       },
+      "fs": {
+        "all": true,
+        "scope": ["$DOCUMENT", "$DOCUMENT/**", "$HOME", "$HOME/**"]
+      },
+      "path": {
+        "all": true
+      },
+      "dialog": {
+        "all": false,
+        "open": true,
+        "save": false,
+        "message": true,
+        "ask": true,
+        "confirm": true
+      },
       "window": {
         "all": false,
         "close": true,
@@ -38,7 +53,9 @@
         "minWidth": 900,
         "minHeight": 600,
         "decorations": false,
-        "transparent": true
+        "transparent": true,
+        "fileDropEnabled": false,
+        "center": true
       }
     ],
     "security": {
