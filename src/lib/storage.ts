@@ -1,74 +1,61 @@
-import localforage from 'localforage';
+import { fileStorage } from './fileStorage';
+import { migrateToFileStorage } from './storageMigration';
 import { Note } from '../types';
 
-const NOTES_KEY = 'brain_notes';
+// Initialize migration on module load
+let migrationPromise: Promise<boolean> | null = null;
 
-localforage.config({
-  name: 'brain',
-  storeName: 'notes',
-});
+async function ensureMigration() {
+  if (!migrationPromise) {
+    migrationPromise = migrateToFileStorage();
+  }
+  return migrationPromise;
+}
 
 export const storage = {
   async getAllNotes(): Promise<Note[]> {
-    try {
-      const notes = await localforage.getItem<Note[]>(NOTES_KEY);
-      return notes || [];
-    } catch (error) {
-      console.error('Error getting notes:', error);
-      return [];
-    }
+    await ensureMigration();
+    return fileStorage.getAllNotes();
   },
 
   async getNote(id: string): Promise<Note | null> {
-    try {
-      const notes = await this.getAllNotes();
-      return notes.find(note => note.id === id) || null;
-    } catch (error) {
-      console.error('Error getting note:', error);
-      return null;
-    }
+    await ensureMigration();
+    return fileStorage.getNote(id);
   },
 
   async saveNote(note: Note): Promise<void> {
-    try {
-      const notes = await this.getAllNotes();
-      const existingIndex = notes.findIndex(n => n.id === note.id);
-      
-      if (existingIndex >= 0) {
-        notes[existingIndex] = { ...note, updatedAt: new Date() };
-      } else {
-        notes.push(note);
-      }
-      
-      await localforage.setItem(NOTES_KEY, notes);
-    } catch (error) {
-      console.error('Error saving note:', error);
-    }
+    await ensureMigration();
+    return fileStorage.saveNote(note);
   },
 
   async deleteNote(id: string): Promise<void> {
-    try {
-      const notes = await this.getAllNotes();
-      const filtered = notes.filter(note => note.id !== id);
-      await localforage.setItem(NOTES_KEY, filtered);
-    } catch (error) {
-      console.error('Error deleting note:', error);
-    }
+    await ensureMigration();
+    return fileStorage.deleteNote(id);
   },
 
   async searchNotes(query: string): Promise<Note[]> {
-    try {
-      const notes = await this.getAllNotes();
-      const lowercaseQuery = query.toLowerCase();
-      
-      return notes.filter(note => 
-        note.title.toLowerCase().includes(lowercaseQuery) ||
-        note.content.toLowerCase().includes(lowercaseQuery) ||
-        note.tags?.some(tag => tag.toLowerCase().includes(lowercaseQuery))
-      );
-    } catch (error) {
-      console.error('Error searching notes:', error);
-      return [];
-    }
+    await ensureMigration();
+    return fileStorage.searchNotes(query);
+  },
+
+  // New methods for file storage
+  async changeStorageFolder(): Promise<string | null> {
+    await ensureMigration();
+    return fileStorage.changeStorageFolder();
+  },
+
+  async getStoragePath(): Promise<string> {
+    await ensureMigration();
+    return fileStorage.getStoragePath();
+  },
+
+  async exportAllNotes(): Promise<string> {
+    await ensureMigration();
+    return fileStorage.exportAllNotes();
+  },
+
+  async importNotes(jsonData: string): Promise<number> {
+    await ensureMigration();
+    return fileStorage.importNotes(jsonData);
   }
 };

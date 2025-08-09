@@ -35,6 +35,12 @@ export const shortcuts: ShortcutConfig[] = [
     description: 'Show shortcuts'
   },
   {
+    key: 'b',
+    ctrl: true,
+    action: () => {},
+    description: 'Toggle sidebar'
+  },
+  {
     key: 'd',
     ctrl: true,
     shift: true,
@@ -47,6 +53,13 @@ export const shortcuts: ShortcutConfig[] = [
     shift: true,
     action: () => {},
     description: 'Toggle theme'
+  },
+  {
+    key: 'z',
+    ctrl: true,
+    shift: true,
+    action: () => {},
+    description: 'Toggle Zen mode'
   },
   {
     key: 'ArrowDown',
@@ -83,12 +96,21 @@ export const useKeyboardShortcuts = (
   onNextNote: () => void,
   onPrevNote: () => void,
   onEscape: () => void,
-  onFocusEditor: () => void
+  onFocusEditor: () => void,
+  onToggleSidebar: () => void,
+  onToggleZenMode: () => void
 ) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Zen mode first (Ctrl+Shift+Z)
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        onToggleZenMode();
+        return;
+      }
+      
       // Allow default behavior for undo/redo
-      if (e.ctrlKey && (e.key === 'z' || e.key === 'y')) {
+      if (e.ctrlKey && !e.shiftKey && (e.key === 'z' || e.key === 'y')) {
         return; // Let the editor handle undo/redo
       }
       
@@ -105,6 +127,9 @@ export const useKeyboardShortcuts = (
       } else if (e.ctrlKey && e.key === 'k') {
         e.preventDefault();
         onShowShortcuts();
+      } else if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        onToggleSidebar();
       } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         onDelete();
@@ -128,5 +153,5 @@ export const useKeyboardShortcuts = (
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNewNote, onSave, onSearch, onShowShortcuts, onDelete, onToggleTheme, onNextNote, onPrevNote, onEscape, onFocusEditor]);
+  }, [onNewNote, onSave, onSearch, onShowShortcuts, onDelete, onToggleTheme, onNextNote, onPrevNote, onEscape, onFocusEditor, onToggleSidebar, onToggleZenMode]);
 };

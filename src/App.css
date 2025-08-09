@@ -104,39 +104,81 @@ code, pre {
 
 /* BlockNote Editor Styling */
 .bn-container {
-  background: var(--editor-bg) !important;
   font-family: 'JetBrains Mono', monospace !important;
   padding: 0 2rem !important;
-  color: var(--text) !important;
+}
+
+[data-theme="dark"] .bn-container {
+  background: #09090b !important;
+}
+
+[data-theme="light"] .bn-container {
+  background: #ffffff !important;
 }
 
 .bn-container .bn-editor {
   font-family: 'JetBrains Mono', monospace !important;
-  background: var(--editor-bg) !important;
   caret-color: var(--accent);
   max-width: 100% !important;
   padding: 0 !important;
 }
 
+[data-theme="dark"] .bn-editor {
+  background: #09090b !important;
+}
+
+[data-theme="light"] .bn-editor {
+  background: #ffffff !important;
+}
+
 .bn-container [contenteditable] {
   outline: none;
-  background: var(--editor-bg) !important;
   font-family: 'JetBrains Mono', monospace !important;
+}
+
+[data-theme="dark"] .bn-container [contenteditable] {
+  background: #09090b !important;
+}
+
+[data-theme="light"] .bn-container [contenteditable] {
+  background: #ffffff !important;
 }
 
 .bn-container .bn-block-outer {
-  background: var(--editor-bg) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+[data-theme="dark"] .bn-block-outer {
+  background: #09090b !important;
+}
+
+[data-theme="light"] .bn-block-outer {
+  background: #ffffff !important;
 }
 
 .bn-container .bn-block-content {
-  background: var(--editor-bg) !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
 
+[data-theme="dark"] .bn-block-content {
+  background: #09090b !important;
+}
+
+[data-theme="light"] .bn-block-content {
+  background: #ffffff !important;
+}
+
 .bn-container .ProseMirror {
-  background: var(--editor-bg) !important;
   padding: 0 !important;
   font-family: 'JetBrains Mono', monospace !important;
+}
+
+[data-theme="dark"] .ProseMirror {
+  background: #09090b !important;
+}
+
+[data-theme="light"] .ProseMirror {
+  background: #ffffff !important;
 }
 
 .bn-container pre,
@@ -155,41 +197,47 @@ code, pre {
 .bn-container li,
 .bn-container blockquote {
   font-family: 'JetBrains Mono', monospace !important;
-  color: var(--text) !important;
+}
+
+[data-theme="dark"] .bn-container p,
+[data-theme="dark"] .bn-container h1,
+[data-theme="dark"] .bn-container h2,
+[data-theme="dark"] .bn-container h3,
+[data-theme="dark"] .bn-container h4,
+[data-theme="dark"] .bn-container h5,
+[data-theme="dark"] .bn-container h6,
+[data-theme="dark"] .bn-container li,
+[data-theme="dark"] .bn-container blockquote {
+  color: #fafafa !important;
+}
+
+[data-theme="light"] .bn-container p,
+[data-theme="light"] .bn-container h1,
+[data-theme="light"] .bn-container h2,
+[data-theme="light"] .bn-container h3,
+[data-theme="light"] .bn-container h4,
+[data-theme="light"] .bn-container h5,
+[data-theme="light"] .bn-container h6,
+[data-theme="light"] .bn-container li,
+[data-theme="light"] .bn-container blockquote {
+  color: #111827 !important;
 }
 
 /* Code blocks */
 .bn-container pre {
-  background: var(--surface) !important;
   border: 1px solid var(--border) !important;
-  color: var(--text) !important;
 }
 
 .bn-container pre code {
-  color: var(--text) !important;
   background: transparent !important;
 }
 
 .bn-container code {
-  background: var(--surface) !important;
-  color: var(--accent) !important;
   padding: 0.125rem 0.25rem !important;
   border-radius: 0.25rem !important;
   font-size: 0.875em !important;
 }
 
-/* Mantine theme override for BlockNote */
-[data-theme="dark"] .bn-container {
-  --mantine-color-body: var(--editor-bg);
-  --mantine-color-dark-7: var(--editor-bg);
-  --mantine-color-dark-6: var(--surface);
-}
-
-[data-theme="light"] .bn-container {
-  --mantine-color-body: var(--editor-bg);
-  --mantine-color-gray-0: var(--editor-bg);
-  --mantine-color-white: var(--editor-bg);
-}
 
 /* Animations */
 @keyframes slideIn {

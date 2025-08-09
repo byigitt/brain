@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Search, FileText, Trash2, Clock, FolderOpen } from 'lucide-react';
+import { Plus, Search, FileText, Trash2, Clock, FolderOpen, Folder, PanelLeftClose } from 'lucide-react';
 import { Note } from '../types';
+import { storage } from '../lib/storage';
 
 interface SidebarProps {
   notes: Note[];
@@ -12,19 +13,27 @@ interface SidebarProps {
   onShowShortcuts?: () => void;
   toggleTheme?: () => void;
   onNavigateToNotes?: () => void;
+  onStoragePathChange?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  zenMode?: boolean;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({
+const SidebarComponent: React.FC<SidebarProps> = ({
   notes,
   selectedNote,
   onSelectNote,
   onCreateNote,
   onDeleteNote,
   onSearch,
+  onStoragePathChange,
+  onToggleCollapse,
+  zenMode = false,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredNote, setHoveredNote] = useState<string | null>(null);
   const [focusedNoteIndex, setFocusedNoteIndex] = useState<number>(-1);
+  const [storagePath, setStoragePath] = useState<string>('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const notesRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -86,6 +95,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Load storage path on mount
+  useEffect(() => {
+    storage.getStoragePath().then(path => {
+      // Get just the last two parts of the path for display
+      const parts = path.split(/[\\/]/);
+      const displayPath = parts.slice(-2).join('/');
+      setStoragePath(displayPath);
+    });
+  }, []);
+
+  const handleChangeFolder = async () => {
+    const newPath = await storage.changeStorageFolder();
+    if (newPath) {
+      const parts = newPath.split(/[\\/]/);
+      const displayPath = parts.slice(-2).join('/');
+      setStoragePath(displayPath);
+      if (onStoragePathChange) {
+        onStoragePathChange();
+      }
+    }
+  };
+
+  const handleCreateNote = () => {
+    onCreateNote();
+  };
+
+
   const formatDate = (date: Date) => {
     const now = new Date();
     const noteDate = new Date(date);
@@ -126,50 +162,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      backgroundColor: 'var(--sidebar-bg)',
-      borderRight: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      transition: 'background-color 200ms',
-      fontFamily: 'JetBrains Mono, monospace'
-    }}>
-      {/* Header */}
-      <div style={{ 
-        padding: '1rem',
+    <>
+      <div style={{
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'var(--sidebar-bg)',
+        borderRight: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'background-color 200ms',
+        fontFamily: 'JetBrains Mono, monospace'
+      }}>
+        {/* Header */}
+        <div style={{ 
+          padding: '0.75rem',
         borderBottom: '1px solid var(--border)',
         background: 'var(--surface)',
       }}>
         <button
-          onClick={onCreateNote}
+          onClick={handleCreateNote}
           style={{
             width: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
-            padding: '0.625rem',
+            padding: '0.5rem',
             background: 'var(--accent)',
             color: 'white',
             borderRadius: '0.5rem',
             border: 'none',
             cursor: 'pointer',
-            fontSize: '0.875rem',
+            fontSize: '0.8125rem',
             fontWeight: 500,
-            transition: 'transform 150ms, box-shadow 150ms',
+            transition: 'all 100ms ease-out',
             fontFamily: 'JetBrains Mono, monospace'
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
             e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
             e.currentTarget.style.background = 'var(--accent-hover)';
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.transform = 'scale(1)';
             e.currentTarget.style.boxShadow = 'none';
             e.currentTarget.style.background = 'var(--accent)';
+          }}
+          onMouseDown={e => {
+            e.currentTarget.style.transform = 'scale(0.98)';
+          }}
+          onMouseUp={e => {
+            e.currentTarget.style.transform = 'translateY(-1px) scale(1.02)';
           }}
         >
           <Plus size={16} />
@@ -177,8 +220,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* Search */}
-      <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)' }}>
+        {/* Search */}
+        <div style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)' }}>
         <div style={{ position: 'relative' }}>
           <Search 
             style={{
@@ -225,13 +268,76 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Notes List */}
-      <div style={{ 
-        flex: 1, 
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        padding: '0.5rem'
-      }}>
+        {/* Storage Location */}
+        <div style={{ 
+          padding: '0.75rem',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--surface)'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.5rem 0.75rem',
+            backgroundColor: 'var(--input-bg)',
+            borderRadius: '0.5rem',
+            border: '1px solid var(--border)',
+            fontSize: '0.6875rem',
+            fontFamily: 'JetBrains Mono, monospace'
+          }}>
+            <Folder size={14} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+            <span style={{ 
+              flex: 1,
+              color: 'var(--muted)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0
+            }}
+            title={storagePath}
+            >
+              {storagePath || 'Loading...'}
+            </span>
+            <button
+              onClick={handleChangeFolder}
+              style={{
+                padding: '0.25rem 0.5rem',
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '0.25rem',
+                color: 'var(--muted)',
+                fontSize: '0.625rem',
+                fontFamily: 'JetBrains Mono, monospace',
+                cursor: 'pointer',
+                transition: 'all 150ms',
+                flexShrink: 0
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--accent)';
+                e.currentTarget.style.color = 'var(--accent)';
+                e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--border)';
+                e.currentTarget.style.color = 'var(--muted)';
+                e.currentTarget.style.backgroundColor = 'var(--surface)';
+              }}
+              title="Change storage folder"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+
+        {/* Notes List */}
+        <div 
+          className="sidebar-scroll"
+          style={{ 
+            flex: 1, 
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            padding: '0.375rem'
+          }}>
         {notes.length === 0 ? (
           <div style={{
             padding: '2rem 1rem',
@@ -244,7 +350,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <p style={{ fontWeight: 500 }}>No notes yet</p>
             <p style={{ fontSize: '0.75rem', marginTop: '0.375rem' }}>
               Press <kbd style={{
-                padding: '0.125rem 0.375rem',
+                padding: '0.0625rem 0.25rem',
                 backgroundColor: 'var(--surface)',
                 borderRadius: '0.25rem',
                 fontSize: '0.6875rem',
@@ -254,7 +360,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
             {notes.map((note) => (
               <div
                 key={note.id}
@@ -278,7 +384,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   style={{
                     width: '100%',
                     textAlign: 'left',
-                    padding: '0.75rem',
+                    padding: '0.625rem',
                     background: 'transparent',
                     border: selectedNote?.id === note.id 
                       ? '1px solid var(--border)' 
@@ -292,7 +398,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     outlineOffset: '-2px'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                     <div style={{ 
                       marginTop: '0.125rem',
                       color: selectedNote?.id === note.id ? 'var(--accent)' : 'var(--muted)',
@@ -302,26 +408,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <h3 style={{
-                        fontSize: '0.875rem',
+                        fontSize: '0.8125rem',
                         fontWeight: 500,
                         color: 'var(--text)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        marginBottom: '0.25rem',
+                        marginBottom: '0.125rem',
                         fontFamily: 'JetBrains Mono, monospace'
                       }}>
                         {note.title || 'Untitled'}
                       </h3>
                       <p style={{
-                        fontSize: '0.75rem',
+                        fontSize: '0.6875rem',
                         color: 'var(--muted)',
                         display: '-webkit-box',
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                         lineHeight: '1.4',
-                        marginBottom: '0.375rem',
+                        marginBottom: '0.25rem',
                         fontFamily: 'JetBrains Mono, monospace'
                       }}>
                         {getPreview(note) || 'Empty note'}
@@ -383,6 +489,81 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
       </div>
-    </div>
+        {/* Collapse button at bottom */}
+        <div style={{
+          padding: '0.75rem',
+          borderTop: '1px solid var(--border)',
+          backgroundColor: 'var(--surface)',
+          opacity: zenMode ? 0.3 : 1,
+          transition: 'opacity 200ms'
+        }}>
+          <button
+            onClick={onToggleCollapse}
+            style={{
+              width: '100%',
+              padding: '0.5rem',
+              backgroundColor: 'var(--input-bg)',
+              border: '1px solid var(--border)',
+              borderRadius: '0.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              color: 'var(--muted)',
+              fontSize: '0.75rem',
+              fontFamily: 'JetBrains Mono, monospace',
+              transition: 'all 150ms'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+              e.currentTarget.style.borderColor = 'var(--accent)';
+              e.currentTarget.style.color = 'var(--text)';
+              if (e.currentTarget.parentElement) {
+                (e.currentTarget.parentElement as HTMLElement).style.opacity = '1';
+              }
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = 'var(--input-bg)';
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color = 'var(--muted)';
+              if (e.currentTarget.parentElement && zenMode) {
+                (e.currentTarget.parentElement as HTMLElement).style.opacity = '0.3';
+              }
+            }}
+            title="Collapse sidebar (Ctrl+B)"
+          >
+            <PanelLeftClose size={14} />
+            <span>Collapse</span>
+          </button>
+        </div>
+      </div>
+      <style>{`
+        /* Custom scrollbar for sidebar */
+        .sidebar-scroll::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+          background: var(--border);
+          border-radius: 3px;
+          transition: background 200ms;
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+          background: var(--muted);
+        }
+        
+        .sidebar-scroll::-webkit-scrollbar-thumb:active {
+          background: var(--accent);
+        }
+      `}</style>
+    </>
   );
 };
+
+export const Sidebar = React.memo(SidebarComponent);

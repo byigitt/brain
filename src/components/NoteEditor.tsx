@@ -10,46 +10,92 @@ import { useTheme } from '../contexts/ThemeContext';
 interface NoteEditorProps {
   note: Note | null;
   onSave: (note: Note) => void;
+  zenMode?: boolean;
+  onToggleZenMode?: () => void;
 }
 
-export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave }, ref) => {
+const NoteEditorComponent = React.forwardRef<any, NoteEditorProps>(({ note, onSave, zenMode = false, onToggleZenMode }, ref) => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [wordCount, setWordCount] = useState(0);
-  const [focusMode, setFocusMode] = useState(false);
-  const [fontSize, setFontSize] = useState(14); // Default font size in px
+  const [zoomLevel, setZoomLevel] = useState(100); // Zoom percentage
   const { theme } = useTheme();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isDeleting = useRef(false);
+  const isInitializing = useRef(false);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   
   const editor = useCreateBlockNote({
-    initialContent: note?.content ? 
-      (typeof note.content === 'string' && note.content.startsWith('[') ? 
-        JSON.parse(note.content) : undefined) 
-      : undefined,
+    initialContent: (() => {
+      try {
+        if (note?.content && note.content !== '' && typeof note.content === 'string' && note.content.startsWith('[')) {
+          return JSON.parse(note.content);
+        }
+      } catch (e) {
+        console.error('Error parsing initial content:', e);
+      }
+      return undefined;
+    })(),
+    uploadFile: undefined, // Disable file uploads to save memory
   });
 
   useEffect(() => {
     if (note && editor) {
       try {
-        if (note.content && typeof note.content === 'string' && note.content.startsWith('[')) {
+        // Mark as initializing to prevent save during setup
+        isInitializing.current = true;
+        
+        if (note.content && note.content !== '' && typeof note.content === 'string' && note.content.startsWith('[')) {
           const parsedContent = JSON.parse(note.content);
           editor.replaceBlocks(editor.document, parsedContent);
         } else {
+          // For new notes with empty content, create default structure
           editor.replaceBlocks(editor.document, [
             {
+              type: "heading",
+              props: {
+                level: 1,
+              },
+              content: "New Note",
+            },
+            {
               type: "paragraph",
-              content: note.content || "Start writing here...",
+              content: "",
             },
           ]);
         }
         updateWordCount();
+        
+        // Reset initializing flag after a brief delay
+        setTimeout(() => {
+          isInitializing.current = false;
+        }, 10);
+        
+        // Focus editor for new notes (empty content)
+        if (!note.content || note.content === '') {
+          setTimeout(() => {
+            const editorElement = document.querySelector('.ProseMirror') as HTMLElement;
+            if (editorElement) {
+              editorElement.focus();
+            }
+          }, 0);
+        }
       } catch (e) {
         console.error('Error parsing content:', e);
       }
     }
   }, [note?.id]);
+
+  // Update editor theme when it changes
+  useEffect(() => {
+    if (editor) {
+      // Force re-render of BlockNote with new theme
+      const editorElement = document.querySelector('.bn-editor');
+      if (editorElement) {
+        editorElement.setAttribute('data-theme', theme);
+      }
+    }
+  }, [theme, editor]);
 
   const updateWordCount = () => {
     if (editor) {
@@ -95,15 +141,15 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
   };
 
   const handleChange = () => {
-    // Don't save if we're deleting a note
-    if (isDeleting.current) return;
+    // Don't save if we're deleting a note or initializing
+    if (isDeleting.current || isInitializing.current) return;
     
     updateWordCount();
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    // Save on every keystroke with a small debounce
-    saveTimeoutRef.current = setTimeout(handleSave, 300);
+    // Save more aggressively - reduced debounce to 100ms
+    saveTimeoutRef.current = setTimeout(handleSave, 100);
   };
 
   // Clear save timeout when note changes or component unmounts
@@ -115,21 +161,22 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
     };
   }, [note?.id]);
 
-  // Set deleting flag when note is about to change
+  // Reset flags when note changes
   useEffect(() => {
     isDeleting.current = false;
+    isInitializing.current = false;
   }, [note?.id]);
 
-  // Handle Ctrl+Scroll for font size
+  // Handle Ctrl+Scroll for zoom
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey && editorContainerRef.current?.contains(e.target as Node)) {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? -1 : 1;
-        setFontSize(prev => {
-          const newSize = prev + delta;
-          // Clamp between 10px and 30px
-          return Math.min(Math.max(newSize, 10), 30);
+        const delta = e.deltaY > 0 ? -5 : 5;
+        setZoomLevel(prev => {
+          const newZoom = prev + delta;
+          // Clamp between 50% and 200%
+          return Math.min(Math.max(newZoom, 50), 200);
         });
       }
     };
@@ -137,6 +184,30 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
     window.addEventListener('wheel', handleWheel, { passive: false });
     return () => window.removeEventListener('wheel', handleWheel);
   }, []);
+
+  // Save on window blur or visibility change
+  useEffect(() => {
+    const handleBlur = () => {
+      if (note && editor && !isDeleting.current) {
+        handleSave();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && note && editor && !isDeleting.current) {
+        handleSave();
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [note, editor]);
+
 
   // Expose save and focus methods to parent via ref
   React.useImperativeHandle(ref, () => ({
@@ -243,9 +314,9 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
       <div style={{ 
         padding: '1rem 1.5rem',
         borderBottom: '1px solid var(--border)',
-        backgroundColor: focusMode ? 'var(--editor-bg)' : 'var(--surface)',
+        backgroundColor: zenMode ? 'var(--editor-bg)' : 'var(--surface)',
         transition: 'all 200ms',
-        opacity: focusMode ? 0.3 : 1
+        opacity: zenMode ? 0.3 : 1
       }}>
         <div style={{ 
           display: 'flex',
@@ -282,7 +353,7 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <button
-              onClick={() => setFocusMode(!focusMode)}
+              onClick={onToggleZenMode}
               style={{ 
                 background: 'transparent',
                 border: 'none',
@@ -303,9 +374,9 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
                 e.currentTarget.style.backgroundColor = 'transparent';
                 e.currentTarget.style.color = 'var(--muted)';
               }}
-              title={focusMode ? "Exit focus mode" : "Enter focus mode"}
+              title={zenMode ? "Exit Zen mode (Ctrl+Shift+Z)" : "Enter Zen mode (Ctrl+Shift+Z)"}
             >
-              {focusMode ? <EyeOff size={16} /> : <Eye size={16} />}
+              {zenMode ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
@@ -317,15 +388,17 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
         style={{ 
           flex: 1,
           overflowY: 'auto',
-          padding: focusMode ? '3rem 2rem' : '2rem 1.5rem',
-          transition: 'padding 200ms',
-          fontSize: `${fontSize}px`
+          padding: zenMode ? '3rem 2rem' : '2rem 1.5rem',
+          transition: 'padding 200ms'
         }}
       >
         <div style={{ 
-          maxWidth: focusMode ? '700px' : '900px',
+          maxWidth: zenMode ? '700px' : '900px',
           margin: '0 auto',
-          transition: 'max-width 200ms'
+          transition: 'max-width 200ms',
+          transform: `scale(${zoomLevel / 100})`,
+          transformOrigin: 'top center',
+          width: `${100 * (100 / zoomLevel)}%`
         }}>
           <BlockNoteView 
             editor={editor} 
@@ -335,8 +408,8 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
         </div>
       </div>
 
-      {/* Font size indicator */}
-      {fontSize !== 14 && (
+      {/* Zoom indicator */}
+      {zoomLevel !== 100 && (
         <div style={{
           position: 'fixed',
           bottom: '3.5rem',
@@ -351,7 +424,7 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
           opacity: 0.7,
           pointerEvents: 'none'
         }}>
-          {fontSize}px
+          {zoomLevel}%
         </div>
       )}
 
@@ -409,4 +482,6 @@ export const NoteEditor = React.forwardRef<any, NoteEditorProps>(({ note, onSave
   );
 });
 
-NoteEditor.displayName = 'NoteEditor';
+NoteEditorComponent.displayName = 'NoteEditor';
+
+export const NoteEditor = React.memo(NoteEditorComponent);

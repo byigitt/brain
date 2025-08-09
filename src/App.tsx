@@ -4,10 +4,12 @@ import { NoteEditor } from './components/NoteEditor';
 import { ShortcutsModal } from './components/ShortcutsModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { TitleBar } from './components/TitleBar';
+import { ContextMenu } from './components/ContextMenu';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { storage } from './lib/storage';
 import { Note } from './types';
+import { PanelLeft } from 'lucide-react';
 
 function AppContent() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -19,6 +21,12 @@ function AppContent() {
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [zenMode, setZenMode] = useState(false);
+  const [sidebarPosition, setSidebarPosition] = useState<'left' | 'right'>(
+    () => (localStorage.getItem('sidebarPosition') as 'left' | 'right') || 'left'
+  );
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [previousFocusElement, setPreviousFocusElement] = useState<HTMLElement | null>(null);
   const { toggleTheme } = useTheme();
   const editorRef = useRef<any>(null);
@@ -47,31 +55,24 @@ function AppContent() {
   };
 
   const handleCreateNote = () => {
+    // Create minimal note object first
     const newNote: Note = {
       id: Date.now().toString(),
       title: 'New Note',
-      content: JSON.stringify([
-        {
-          type: "heading",
-          props: {
-            level: 1,
-          },
-          content: "New Note",
-        },
-        {
-          type: "paragraph",
-          content: "Start writing here...",
-        },
-      ]),
+      content: '', // Start with empty content for faster creation
       createdAt: new Date(),
       updatedAt: new Date(),
       tags: [],
     };
 
+    // Update state immediately for instant feedback
     setNotes([newNote, ...notes]);
     setFilteredNotes([newNote, ...filteredNotes]);
+    
+    // Directly set the selected note without saving the previous one
     setSelectedNote(newNote);
-    storage.saveNote(newNote);
+    
+    // Note will be saved when user starts typing (through the editor's onChange)
   };
 
   const handleSaveNote = async (updatedNote: Note) => {
@@ -126,18 +127,57 @@ function AppContent() {
     }
   };
 
-  const handleNextNote = () => {
+  const handleNextNote = async () => {
     if (filteredNotes.length === 0) return;
     const currentIndex = filteredNotes.findIndex(n => n.id === selectedNote?.id);
     const nextIndex = (currentIndex + 1) % filteredNotes.length;
-    setSelectedNote(filteredNotes[nextIndex]);
+    await handleSelectNote(filteredNotes[nextIndex]);
   };
 
-  const handlePrevNote = () => {
+  const handlePrevNote = async () => {
     if (filteredNotes.length === 0) return;
     const currentIndex = filteredNotes.findIndex(n => n.id === selectedNote?.id);
     const prevIndex = currentIndex === 0 ? filteredNotes.length - 1 : currentIndex - 1;
-    setSelectedNote(filteredNotes[prevIndex]);
+    await handleSelectNote(filteredNotes[prevIndex]);
+  };
+
+  const handleSelectNote = async (note: Note | null, skipSave: boolean = false) => {
+    // Save current note before switching (unless explicitly skipped)
+    if (!skipSave && selectedNote && editorRef.current?.save) {
+      await editorRef.current.save();
+    }
+    
+    // If selecting a note, load its full content (sidebar only has preview)
+    if (note) {
+      const fullNote = await storage.getNote(note.id);
+      setSelectedNote(fullNote);
+    } else {
+      setSelectedNote(null);
+    }
+  };
+
+  const handleStoragePathChange = async () => {
+    // Reload notes from new location
+    await loadNotes();
+  };
+
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
+  const handleToggleSidebarPosition = () => {
+    const newPosition = sidebarPosition === 'left' ? 'right' : 'left';
+    setSidebarPosition(newPosition);
+    localStorage.setItem('sidebarPosition', newPosition);
+  };
+
+  const handleSidebarContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleToggleZenMode = () => {
+    setZenMode(!zenMode);
   };
 
   const handleEscape = () => {
@@ -176,6 +216,8 @@ function AppContent() {
     }
   }, [isResizing]);
 
+  // Use handleCreateNote directly - no need for debouncing since it's instant now
+
   // Keyboard shortcuts
   useKeyboardShortcuts(
     handleCreateNote,
@@ -204,7 +246,9 @@ function AppContent() {
           editorRef.current.focus();
         }
       }
-    }
+    },
+    handleToggleSidebar,
+    handleToggleZenMode
   );
 
   if (isLoading) {
@@ -239,52 +283,118 @@ function AppContent() {
           overflow: 'hidden',
           position: 'relative'
         }}>
-          <div style={{ 
-            width: `${sidebarWidth}px`,
-            position: 'relative',
-            flexShrink: 0
-          }}>
-            <Sidebar
-              notes={filteredNotes}
-              selectedNote={selectedNote}
-              onSelectNote={setSelectedNote}
-              onCreateNote={handleCreateNote}
-              onDeleteNote={handleDeleteNote}
-              onSearch={handleSearch}
-              onShowShortcuts={() => setShowShortcuts(true)}
-              toggleTheme={toggleTheme}
-            />
-            {/* Resize handle */}
-            <div
-              style={{
+          <>
+            {/* Toggle button - always visible */}
+            {sidebarCollapsed && (
+              <button
+                onClick={handleToggleSidebar}
+                style={{
+                  position: 'absolute',
+                  [sidebarPosition === 'left' ? 'left' : 'right']: '0.75rem',
+                  bottom: '0.75rem',
+                  width: '36px',
+                  height: '36px',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  zIndex: 20,
+                  color: 'var(--muted)',
+                  transition: 'all 150ms',
+                  opacity: zenMode ? 0.3 : 1
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                  e.currentTarget.style.color = 'var(--accent)';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                  e.currentTarget.style.opacity = '1';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.backgroundColor = 'var(--surface)';
+                  e.currentTarget.style.color = 'var(--muted)';
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.opacity = zenMode ? '0.3' : '1';
+                }}
+                title="Expand sidebar (Ctrl+B)"
+              >
+                <PanelLeft size={18} />
+              </button>
+            )}
+            
+            <div 
+              style={{ 
+                width: sidebarCollapsed ? '0px' : `${sidebarWidth}px`,
+                position: 'relative',
+                flexShrink: 0,
+                transition: 'width 200ms ease-in-out',
+                overflow: 'hidden',
+                order: sidebarPosition === 'left' ? 0 : 2
+              }}
+              onContextMenu={handleSidebarContextMenu}
+            >
+              <div style={{
+                width: `${sidebarWidth}px`,
+                height: '100%',
                 position: 'absolute',
-                top: 0,
-                right: -2,
-                bottom: 0,
-                width: '4px',
-                cursor: 'col-resize',
-                backgroundColor: isResizing ? 'var(--accent)' : 'transparent',
-                transition: 'background-color 150ms',
-                zIndex: 10
-              }}
-              onMouseDown={() => setIsResizing(true)}
-              onMouseEnter={e => {
-                if (!isResizing) {
-                  e.currentTarget.style.backgroundColor = 'var(--border)';
-                }
-              }}
-              onMouseLeave={e => {
-                if (!isResizing) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
+                left: 0,
+                top: 0
+              }}>
+                <Sidebar
+                  notes={filteredNotes}
+                  selectedNote={selectedNote}
+                  onSelectNote={handleSelectNote}
+                  onCreateNote={handleCreateNote}
+                  onDeleteNote={handleDeleteNote}
+                  onSearch={handleSearch}
+                  onShowShortcuts={() => setShowShortcuts(true)}
+                  toggleTheme={toggleTheme}
+                  onStoragePathChange={handleStoragePathChange}
+                  collapsed={sidebarCollapsed}
+                  onToggleCollapse={handleToggleSidebar}
+                  zenMode={zenMode}
+                />
+                {/* Resize handle */}
+                {!sidebarCollapsed && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      [sidebarPosition === 'left' ? 'right' : 'left']: -2,
+                      bottom: 0,
+                      width: '4px',
+                      cursor: 'col-resize',
+                      backgroundColor: isResizing ? 'var(--accent)' : 'transparent',
+                      transition: 'background-color 150ms',
+                      zIndex: 10
+                    }}
+                    onMouseDown={() => setIsResizing(true)}
+                    onMouseEnter={e => {
+                      if (!isResizing) {
+                        e.currentTarget.style.backgroundColor = 'var(--border)';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isResizing) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          </>
+          <div style={{ flex: 1, display: 'flex', order: 1 }}>
+            <NoteEditor
+              ref={editorRef}
+              note={selectedNote}
+              onSave={handleSaveNote}
+              zenMode={zenMode}
+              onToggleZenMode={handleToggleZenMode}
             />
           </div>
-          <NoteEditor
-            ref={editorRef}
-            note={selectedNote}
-            onSave={handleSaveNote}
-          />
         </div>
       </div>
       <ShortcutsModal 
@@ -301,6 +411,15 @@ function AppContent() {
         onCancel={cancelDelete}
         danger={true}
       />
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          sidebarPosition={sidebarPosition}
+          onTogglePosition={handleToggleSidebarPosition}
+        />
+      )}
     </>
   );
 }
